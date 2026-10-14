@@ -28,18 +28,20 @@ class Zalomeni {
   }
 
   public function add_filters() {
+    // 'acf_the_content' covers ACF wysiwyg fields; Bricks supplies completed HTML.
+    $filters = array('comment_author', 'term_name', 'link_name', 'link_description', 'link_notes', 'bloginfo', 'wp_title', 'widget_title', 'term_description', 'the_title', 'the_content', 'the_excerpt', 'comment_text', 'single_post_title', 'list_cats', 'acf_the_content', 'bricks/frontend/render_data');
+    $filters = array_combine($filters, $filters);
+    $filters = apply_filters('zalomeni_filtry', $filters);
     $zalomeni_matches = get_option('zalomeni_matches');
-    if (!empty($zalomeni_matches)) {
-      // 'acf_the_content' is the filter Advanced Custom Fields runs its wysiwyg
-      // fields through instead of 'the_content', so theme content built from ACF
-      // fields is covered too.
-      $filters = array('comment_author', 'term_name', 'link_name', 'link_description', 'link_notes', 'bloginfo', 'wp_title', 'widget_title', 'term_description', 'the_title', 'the_content', 'the_excerpt', 'comment_text', 'single_post_title', 'list_cats', 'acf_the_content');
-      $filters = array_combine($filters, $filters);
-      $filters = apply_filters('zalomeni_filtry', $filters);
-      foreach ($filters as $filter) {
+    foreach ($filters as $filter) {
+      if ($filter === 'bricks/frontend/render_data') {
+        add_filter($filter, array(__CLASS__, 'texturize_bricks'), 20, 1);
+      } elseif (!empty($zalomeni_matches)) {
         add_filter($filter, array(__CLASS__, 'texturize'));
       }
+    }
 
+    if (!empty($zalomeni_matches)) {
       // ACF text and textarea fields never pass through a content filter -- the
       // theme prints them on its own, usually escaped. They get the character
       // variant, see texturize_plain().
@@ -262,7 +264,7 @@ class Zalomeni {
     update_option('zalomeni_replacements', self::prepare_replacements());
   }
 
-  private static function prepare_matches() {
+  private static function prepare_matches($decoded = false) {
     $return_array = array();
 
     $word_matches = '';
@@ -284,6 +286,9 @@ class Zalomeni {
       // standalone preposition. Each lookbehind must stay a fixed-length literal (PCRE).
       $no_apostrophe = '(?<!&#8217;)(?<!&#39;)(?<!&#039;)(?<!&rsquo;)(?<!&apos;)(?<!&#x2019;)(?<!&#x27;)';
       $return_array['words'] = '@(^|;| |&nbsp;|\(|\n)'.$no_apostrophe.'('.$word_matches.') @i';
+      if ($decoded) {
+        $return_array['words'] = '@(^| |' . "\xC2\xA0" . '|\(|\n|"|„|“|‚|‘)('.$word_matches.') @i';
+      }
     }
 
     $word_matches = '';
@@ -297,6 +302,9 @@ class Zalomeni {
     }
     if ($word_matches !== '') {
       $return_array['units'] = '@(\d) ('.$word_matches.')(^|[;\.!:]| |&nbsp;|\?|\n|\)|<|\010|\013|$)@i';
+      if ($decoded) {
+        $return_array['units'] = str_replace('&nbsp;', "\xC2\xA0", $return_array['units']);
+      }
     }
 
     if (get_option('zalomeni_space_between_numbers', self::default_space_between_numbers) === 'on') {
@@ -322,7 +330,8 @@ class Zalomeni {
             $escaped = preg_quote($j, '/');
             // Restore supported backslash sequences (\d, \w, \s, etc.)
             $escaped = preg_replace('/\\\\\\\\([dDwWsS])/', '\\\\$1', $escaped);
-            $term .= ($term === '' ? '(' : ' (') . $escaped . ')';
+            $separator = $decoded ? '(?: |' . "\xC2\xA0" . ')(' : ' (';
+            $term .= ($term === '' ? '(' : $separator) . $escaped . ')';
           }
           $term = '/' . $term . '/i';
           $return_array['customterm' . $term_counter++] = $term;
@@ -333,7 +342,7 @@ class Zalomeni {
     return $return_array;
   }
 
-  private static function prepare_replacements() {
+  private static function prepare_replacements($decoded = false) {
     $return_array = array();
 
     foreach (array('prepositions', 'conjunctions', 'abbreviations') as $i) {
@@ -375,6 +384,9 @@ class Zalomeni {
       }
     }
 
+    if ($decoded) {
+      $return_array = str_replace('&nbsp;', "\xC2\xA0", $return_array);
+    }
     return $return_array;
   }
 
@@ -423,6 +435,71 @@ class Zalomeni {
     return str_replace('&nbsp;', "\xC2\xA0", self::texturize($value));
   }
 
+  /** Typography for public Bricks HTML; text updates require WordPress 6.7+. */
+  public static function texturize_bricks($html) {
+    if (!is_string($html) || $html === '' || !class_exists('WP_HTML_Processor')
+        || !method_exists('WP_HTML_Processor', 'set_modifiable_text')) {
+      return $html;
+    }
+    if ((function_exists('bricks_is_builder') && bricks_is_builder())
+        || (function_exists('bricks_is_builder_call') && bricks_is_builder_call())) {
+      return $html;
+    }
+
+    $matches = self::prepare_matches(true);
+    if (empty($matches)) return $html;
+    $compiled_replacements = self::prepare_replacements(true);
+    $replacements = array();
+    // preg_replace pairs arrays by iteration order, even when keys differ.
+    foreach ($matches as $key => $pattern) {
+      if (!array_key_exists($key, $compiled_replacements)) return $html;
+      $replacements[] = $compiled_replacements[$key];
+    }
+
+    $processor = WP_HTML_Processor::create_fragment($html);
+    if ($processor === null) return $html;
+    $excluded = apply_filters('no_texturize_tags', array('pre', 'code', 'kbd', 'style', 'script', 'tt'));
+    $excluded = array_merge(array_map('strtoupper', $excluded), array('SVG', 'MATH'));
+    while ($processor->next_token()) {
+      if ($processor->get_token_type() !== '#text' || $processor->get_namespace() !== 'html'
+          || array_intersect($excluded, $processor->get_breadcrumbs())) {
+        continue;
+      }
+      $text = $processor->get_modifiable_text();
+      $result = self::replace_spaces($text, $matches, $replacements, true);
+      if ($result !== $text && !$processor->set_modifiable_text($result)) {
+        return $html;
+      }
+    }
+    if ($processor->get_last_error() !== null || $processor->paused_at_incomplete_token()) {
+      return $html;
+    }
+    return $processor->get_updated_html();
+  }
+
+  private static function replace_spaces($text, $matches, $replacements, $until_stable = false) {
+    if (!$until_stable) {
+      $result = @preg_replace($matches, $replacements, $text);
+      if ($result !== null) {
+        $result = @preg_replace($matches, $replacements, $result);
+      }
+      return ($result !== null) ? $result : $text;
+    }
+
+    $result = $text;
+    $spaces = substr_count($text, ' ');
+    $remaining_passes = $spaces;
+    while (true) {
+      $next = @preg_replace($matches, $replacements, $result);
+      if ($next === null) return $text;
+      if ($next === $result) return $result;
+      $next_spaces = substr_count($next, ' ');
+      if ($remaining_passes-- <= 0 || $next_spaces >= $spaces) return $text;
+      $result = $next;
+      $spaces = $next_spaces;
+    }
+  }
+
   public static function texturize($text) {
     $matches = get_option('zalomeni_matches');
     if (empty($matches)) return $text;
@@ -444,11 +521,7 @@ class Zalomeni {
       if (!empty($curl)) {
         if ('<' !== $curl[0] && '[' !== $curl[0]
             && empty($no_texturize_shortcodes_stack) && empty($no_texturize_tags_stack)) {
-          $result = @preg_replace($matches, $replacements, $curl);
-          if ($result !== null) {
-            $result = @preg_replace($matches, $replacements, $result);
-          }
-          $curl = ($result !== null) ? $result : $curl;
+          $curl = self::replace_spaces($curl, $matches, $replacements);
         } else {
           self::pushpop_element($curl, $no_texturize_tags_stack, $no_texturize_tags, '<', '>');
           self::pushpop_element($curl, $no_texturize_shortcodes_stack, $no_texturize_shortcodes, '[', ']');
