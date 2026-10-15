@@ -80,6 +80,13 @@ function decoded_text($html) {
 }
 
 function run_bricks_checks($disabled, $context) {
+    if (!class_exists('WP_HTML_Processor') || !method_exists('WP_HTML_Processor', 'set_modifiable_text')) {
+        throw new RuntimeException('The bricks group requires the real WordPress HTML text-update API (WordPress 6.7+).');
+    }
+    if (!is_callable(array('Bricks\\Frontend', 'render_data'))
+        || !function_exists('bricks_is_builder') || !function_exists('bricks_is_builder_call')) {
+        throw new RuntimeException('The bricks group requires active Bricks Builder with Frontend::render_data(), bricks_is_builder() and bricks_is_builder_call().');
+    }
     $nbsp = "\xC2\xA0";
     expect_same('Bricks callback priority', 20, has_filter('bricks/frontend/render_data', array('Zalomeni', 'texturize_bricks')));
     expect_same('no legacy Bricks callback', false, has_filter('bricks/frontend/render_data', array('Zalomeni', 'texturize')));
@@ -206,18 +213,16 @@ function run_bricks_checks($disabled, $context) {
             }
         }
 
-        $posts = get_posts(array('post_type' => 'any', 'post_status' => 'publish', 'numberposts' => 1));
-        $post = reset($posts);
-        if (!$post instanceof WP_Post) {
-            throw new RuntimeException('The dynamic-provider fixture needs an existing published post.');
-        }
-        $dynamic = function ($html, $post) { return str_replace('{zalomeni_test}', 'v lese', $html); };
-        add_filter('bricks/frontend/render_data', $dynamic, 10, 2);
+        $earlier_filter = function ($html, $post) {
+            expect_same('earlier-filter receives null post', null, $post);
+            return str_replace('%%zalomeni_test%%', 'v lese', $html);
+        };
+        add_filter('bricks/frontend/render_data', $earlier_filter, 10, 2);
         try {
-            expect_same('earlier dynamic provider output is processed', '<p>v'.$nbsp.'lese</p>',
-                apply_filters('bricks/frontend/render_data', '<p>{zalomeni_test}</p>', $post, 'content'));
+            expect_same('earlier-filter ordering processes replacement text', '<p>v'.$nbsp.'lese</p>',
+                apply_filters('bricks/frontend/render_data', '<p>%%zalomeni_test%%</p>', null, 'content'));
         } finally {
-            remove_filter('bricks/frontend/render_data', $dynamic, 10);
+            remove_filter('bricks/frontend/render_data', $earlier_filter, 10);
         }
 
         $previous_limit = ini_get('pcre.backtrack_limit');
@@ -369,6 +374,12 @@ try {
     if (!class_exists('Zalomeni', false)) {
         throw new RuntimeException('The active Zalomeni plugin was not loaded by WordPress.');
     }
+    $loaded_plugin = realpath((new ReflectionClass('Zalomeni'))->getFileName());
+    $checkout_plugin = realpath(__DIR__ . '/../zalomeni.php');
+    if ($loaded_plugin === false || $checkout_plugin === false || $loaded_plugin !== $checkout_plugin) {
+        throw new RuntimeException('WordPress loaded a different Zalomeni checkout. Expected: '
+            . var_export($checkout_plugin, true) . '; loaded: ' . var_export($loaded_plugin, true));
+    }
     echo 'WordPress ' . $wp_version . '; PHP ' . PHP_VERSION . "\n";
 
     if ($group === 'compatibility') {
@@ -405,6 +416,8 @@ try {
 
     // Original-plugin characterization values captured before runtime edits,
     // from zalomeni.php at e05c652 on WordPress 7.1.3 / PHP 8.4.24.
+    // Upstream c22ec3baf5fc8c1bba05251f30236d8e3117088e has the identical original
+    // zalomeni.php blob b0dd4a7ee5879815365f9636f00a3bfc411ccb42.
     // Keep compiler arrays literal: stored fixtures alone cannot detect compiler changes.
     $fixtures = array(
         'words' => array(
