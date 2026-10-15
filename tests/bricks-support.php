@@ -293,27 +293,33 @@ function run_bricks_checks($disabled, $context) {
     expect_same('legacy helper scalar inputs', 'v_lese', $helper->invoke(null, 'v lese', '/ /', '_'));
 
     $saved = zalomeni_bindings();
+    $stored = array_merge($words, array('zalomeni_matches' => array('words' => '@(^|;| |&nbsp;|\(|\n)(v) @i'), 'zalomeni_replacements' => array('words' => '$1$2&nbsp;')));
     $calls = 0;
     $opt_out = function ($filters) use (&$calls) { $calls++; unset($filters['bricks/frontend/render_data']); return $filters; };
     add_filter('zalomeni_filtry', $opt_out);
     try {
-        with_registration_options($words, function () {
+        with_registration_options($stored, function () {
             expect_same('Bricks opt-out registration', false, has_filter('bricks/frontend/render_data', array('Zalomeni', 'texturize_bricks')));
+        });
+        with_registration_options($words, function () {
+            expect_same('empty stored arrays register nothing', array(), zalomeni_bindings());
         });
     } finally {
         remove_filter('zalomeni_filtry', $opt_out);
     }
-    expect_same('filter list applied once with empty stored arrays', 1, $calls);
+    expect_same('filter list applied only with stored rules', 1, $calls);
     expect_same('bindings restored after opt-out', $saved, zalomeni_bindings());
-    with_registration_options($words, function () use ($nbsp) {
-        expect_same('empty stored arrays Bricks priority', 20, has_filter('bricks/frontend/render_data', array('Zalomeni', 'texturize_bricks')));
+    with_registration_options($stored, function () use ($nbsp) {
+        expect_same('stored rules Bricks priority', 20, has_filter('bricks/frontend/render_data', array('Zalomeni', 'texturize_bricks')));
+        expect_same('no legacy Bricks callback', false, has_filter('bricks/frontend/render_data', array('Zalomeni', 'texturize')));
         foreach (zalomeni_bindings() as $binding) {
-            expect_same('empty stored arrays no legacy callback', 'texturize_bricks', $binding[1][1]);
-            expect_same('Bricks accepts HTML only', 1, $binding[3]);
+            if ($binding[0] === 'bricks/frontend/render_data') {
+                expect_same('Bricks accepts HTML only', 1, $binding[3]);
+            }
         }
-        expect_same('empty stored arrays current rules', '<p>v'.$nbsp.'lese</p>', apply_filters('bricks/frontend/render_data', '<p>v lese</p>', null, 'content'));
+        expect_same('stored rules current output', '<p>v'.$nbsp.'lese</p>', apply_filters('bricks/frontend/render_data', '<p>v lese</p>', null, 'content'));
     });
-    expect_same('bindings restored after empty arrays', $saved, zalomeni_bindings());
+    expect_same('bindings restored after stored rules', $saved, zalomeni_bindings());
     foreach (array('', null, false, array('v lese')) as $value) {
         expect_same('empty or nonstring guard', $value, Zalomeni::texturize_bricks($value));
     }

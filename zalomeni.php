@@ -28,20 +28,22 @@ class Zalomeni {
   }
 
   public function add_filters() {
-    // 'acf_the_content' covers ACF wysiwyg fields; Bricks supplies completed HTML.
-    $filters = array('comment_author', 'term_name', 'link_name', 'link_description', 'link_notes', 'bloginfo', 'wp_title', 'widget_title', 'term_description', 'the_title', 'the_content', 'the_excerpt', 'comment_text', 'single_post_title', 'list_cats', 'acf_the_content', 'bricks/frontend/render_data');
-    $filters = array_combine($filters, $filters);
-    $filters = apply_filters('zalomeni_filtry', $filters);
     $zalomeni_matches = get_option('zalomeni_matches');
-    foreach ($filters as $filter) {
-      if ($filter === 'bricks/frontend/render_data') {
-        add_filter($filter, array(__CLASS__, 'texturize_bricks'), 20, 1);
-      } elseif (!empty($zalomeni_matches)) {
-        add_filter($filter, array(__CLASS__, 'texturize'));
-      }
-    }
-
     if (!empty($zalomeni_matches)) {
+      // 'acf_the_content' is the filter Advanced Custom Fields runs its wysiwyg
+      // fields through instead of 'the_content', so theme content built from ACF
+      // fields is covered too. Bricks hands over finished HTML, see texturize_bricks().
+      $filters = array('comment_author', 'term_name', 'link_name', 'link_description', 'link_notes', 'bloginfo', 'wp_title', 'widget_title', 'term_description', 'the_title', 'the_content', 'the_excerpt', 'comment_text', 'single_post_title', 'list_cats', 'acf_the_content', 'bricks/frontend/render_data');
+      $filters = array_combine($filters, $filters);
+      $filters = apply_filters('zalomeni_filtry', $filters);
+      foreach ($filters as $filter) {
+        if ($filter === 'bricks/frontend/render_data') {
+          add_filter($filter, array(__CLASS__, 'texturize_bricks'), 20);
+        } else {
+          add_filter($filter, array(__CLASS__, 'texturize'));
+        }
+      }
+
       // ACF text and textarea fields never pass through a content filter -- the
       // theme prints them on its own, usually escaped. They get the character
       // variant, see texturize_plain().

@@ -49,7 +49,7 @@ class BricksSupportTest extends TestCase {
                 }
             }
         }
-        if ( $opt_out ) {
+        if ( $opt_out || ! $stored_matches ) {
             WP_Mock::expectFilterNotAdded( 'bricks/frontend/render_data', [ 'Zalomeni', 'texturize_bricks' ], 20, 1 );
         } else {
             WP_Mock::expectFilterAdded( 'bricks/frontend/render_data', [ 'Zalomeni', 'texturize_bricks' ], 20, 1 );
@@ -61,10 +61,10 @@ class BricksSupportTest extends TestCase {
         }
 
         zalomeni_init()->add_filters();
-        $this->assertSame( $stored_matches ? [ 'zalomeni_filtry', 'zalomeni_acf_filtry' ] : [ 'zalomeni_filtry' ], $applied );
+        $this->assertSame( $stored_matches ? [ 'zalomeni_filtry', 'zalomeni_acf_filtry' ] : [], $applied );
     }
 
-    public function test_registers_bricks_with_empty_stored_patterns(): void {
+    public function test_registers_nothing_with_empty_stored_patterns(): void {
         $this->check_registration( [] );
     }
 
