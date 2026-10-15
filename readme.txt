@@ -107,6 +107,12 @@ function remove_acf_textarea_from_zalomeni(array $filters) {
 
 == Changelog ==
 
+= 2.2.0 =
+
+* New: Bricks Builder support — non-breaking spaces are added to the HTML Bricks renders for headers, content, footers and popups (requires WordPress 6.7+; contributed by @arteagacz)
+* Only visible text is changed; attributes, scripts, styles, SVG/MathML and tags from `no_texturize_tags` are left alone, and the Bricks editor is skipped
+* Remove `bricks/frontend/render_data` through the `zalomeni_filtry` filter to turn Bricks support off
+
 = 2.1.0 (2026-09-25) =
 
 * New: fields of Advanced Custom Fields are handled too — wysiwyg fields through `acf_the_content`, text and textarea fields through `acf/format_value`
