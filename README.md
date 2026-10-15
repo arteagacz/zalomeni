@@ -50,7 +50,7 @@ By default it applies to `comment_author`, `term_name`, `link_name`, `link_descr
 
 ```bash
 composer install
-php vendor/bin/phpunit
+vendor/bin/phpunit
 ```
 
 Tests use [WP_Mock](https://github.com/10up/wp_mock) with PHPUnit 9.6 and require PHP 7.4+; the plugin itself targets PHP 7.0+.
