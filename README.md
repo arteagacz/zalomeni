@@ -53,28 +53,13 @@ composer install
 php vendor/bin/phpunit
 ```
 
-This suite uses [WP_Mock](https://github.com/10up/wp_mock) with PHPUnit 9.6 and needs PHP 7.4+; the plugin itself targets PHP 7.0+. It runs without WordPress or Bricks Builder. The original tests check the existing HTML and plain-text behavior; `BricksSupportTest.php` adds registration, decoded-text rules and failure handling. Expected strings are written in the tests. The missing-processor check covers this mock environment; it does not establish behavior on an older WordPress installation.
+Tests use [WP_Mock](https://github.com/10up/wp_mock) with PHPUnit 9.6 and require PHP 7.4+; the plugin itself targets PHP 7.0+.
 
-The separate integration script needs an existing WordPress installation with this checkout active as its Zalomení plugin. It checks the loaded plugin's filename and fails if WordPress loads another checkout. Set `ZALOMENI_WP_LOAD` to that installation's readable `wp-load.php`, then run from this directory (POSIX shell example):
+For integration checks, use a WordPress 6.7+ installation with this plugin and Bricks Builder active:
 
 ```bash
-export ZALOMENI_WP_LOAD=/path/to/wordpress/wp-load.php
-php tests/bricks-support.php --group=legacy
-php tests/bricks-support.php --group=bricks
-php tests/bricks-support.php --group=bricks --context=builder
-php tests/bricks-support.php --group=bricks --context=public-rest
-php tests/bricks-support.php --group=bricks --context=builder-rest
-php tests/bricks-support.php --group=compatibility
+ZALOMENI_WP_LOAD=/path/to/wordpress/wp-load.php php tests/bricks-support.php --group=bricks
 ```
-
-In PowerShell, set the variable with `$env:ZALOMENI_WP_LOAD = 'C:/path/to/wordpress/wp-load.php'`. Use a fresh PHP process for each command because Bricks Builder caches its request classification.
-
-- `legacy` compares the original compiler arrays and output against literal values captured from the original plugin at `e05c652` on WordPress 7.1.3 / PHP 8.4.24. Upstream commit `c22ec3baf5fc8c1bba05251f30236d8e3117088e` has the same original `zalomeni.php` blob (`b0dd4a7ee5879815365f9636f00a3bfc411ccb42`).
-- `bricks` requires active Bricks Builder and the real WordPress HTML text-update API (WordPress 6.7+). It checks specification examples, protected markup, repeated processing, failure fallback, registration and real Bricks Builder rendering for content, headers, footers and popups. The priority-10 marker replacement checks earlier-filter ordering; it is not proof of a real post-dependent dynamic provider. If a suitable published section/content template exists, the script also renders it nested inside a parent; otherwise it reports `UNVERIFIED`. No database fixtures are saved.
-- The three Bricks Builder contexts check that builder and builder REST output stays unchanged while public REST output receives typography. These simulate request context in standalone PHP processes; they are not browser or HTTP endpoint tests.
-- `compatibility` checks unchanged HTML when the required HTML text-update API is absent. It reports `NOT APPLICABLE` when that API exists. Both `legacy` and `compatibility` can run without Bricks Builder. A run on a current WordPress installation does not establish WordPress 6.0/6.7 or PHP 7.0 compatibility.
-
-Bricks Builder expectations are literal specification values, separate from the captured legacy output. The real renderer checks target Bricks Builder 2.4.3. These integration checks are separate from PHPUnit discovery and CI. The existing GitHub Actions workflow runs on pushes to `main` and pull requests targeting `main`; pushing a feature branch without a pull request does not run it.
 
 See [CLAUDE.md](CLAUDE.md) for the pre-release checklist, the distribution payload, and the automated WordPress.org deploy flow.
 

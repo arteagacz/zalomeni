@@ -76,22 +76,6 @@ Yes. Wysiwyg fields run through ACF's own `acf_the_content` filter instead of `t
 
 Themes usually escape those values with `esc_html()`, which would turn a `&nbsp;` entity into visible text. For that reason text and textarea fields get the non-breaking space character (U+00A0) instead of the entity. It renders the same and survives escaping.
 
-= Does it work with Bricks Builder? =
-
-Yes. Bricks Builder support requires WordPress 6.7+ with the required HTML API methods. It was tested with Bricks Builder 2.4.3 on WordPress 7.1.3 and PHP 8.4.24. The plugin's overall WordPress 6.0 and PHP 7.0 requirements remain unchanged; your installation must also meet WordPress's own PHP requirements. On older WordPress versions, Bricks Builder HTML is returned unchanged while existing WordPress and Advanced Custom Fields processing remains available.
-
-Zalomení processes public server-rendered text in pages, headers, footers, nested templates, popups and public Bricks Builder query updates. It uses your existing typography settings and inserts the non-breaking space character (U+00A0), without changing saved content.
-
-Builder editing requests are excluded, so the builder canvas preview is not guaranteed to match the public page. Attributes, protected containers such as code and scripts, SVG and MathML subtrees (including embedded HTML), and content created entirely by JavaScript are excluded. Words split across separate text nodes are not joined, for example `<strong>v</strong> lese`. Unsupported or incomplete markup causes the entire original fragment to be returned unchanged. Standalone table-internal fragments needing a different parsing context are not covered.
-
-To disable only Bricks Builder processing, register this filter before WordPress's `init` action:
-
-<code>add_filter('zalomeni_filtry', 'remove_bricks_from_zalomeni');
-function remove_bricks_from_zalomeni(array $filters) {
-  unset($filters['bricks/frontend/render_data']);
-  return $filters;
-}</code>
-
 = Which WordPress filters does the plugin apply to? =
 
 The plugin applies to these filters by default: `comment_author`, `term_name`, `link_name`, `link_description`, `link_notes`, `bloginfo`, `wp_title`, `widget_title`, `term_description`, `the_title`, `the_content`, `the_excerpt`, `comment_text`, `single_post_title`, `list_cats`, `acf_the_content`, `bricks/frontend/render_data`.
@@ -122,11 +106,6 @@ function remove_acf_textarea_from_zalomeni(array $filters) {
 2. Example output
 
 == Changelog ==
-
-= Unreleased =
-
-* New: Bricks Builder support for public server-rendered text using the existing typography settings; requires WordPress 6.7+ and was tested with Bricks Builder 2.4.3.
-* Release preparation: the maintainer assigns the release version. Stable tag and plugin version remain 2.1.0 during implementation.
 
 = 2.1.0 (2026-09-25) =
 
