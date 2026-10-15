@@ -280,7 +280,11 @@ class Zalomeni {
         }
       }
     }
-    if ($word_matches !== '') {
+    if ($word_matches !== '' && $decoded) {
+      // Decoded text has real characters instead of entities, so opening quotes are
+      // listed directly and an apostrophe is never a boundary -- no lookbehinds needed.
+      $return_array['words'] = '@(^| |' . "\xC2\xA0" . '|\(|\n|"|„|“|‚|‘)('.$word_matches.') @i';
+    } elseif ($word_matches !== '') {
       // A semicolon counts as a leading boundary so prepositions glued to an HTML entity
       // still get a non-breaking space -- typically the Czech opening quote, `&#8222;V lese`.
       // Apostrophe entities are excluded: wptexturize turns "America's" into
@@ -288,9 +292,6 @@ class Zalomeni {
       // standalone preposition. Each lookbehind must stay a fixed-length literal (PCRE).
       $no_apostrophe = '(?<!&#8217;)(?<!&#39;)(?<!&#039;)(?<!&rsquo;)(?<!&apos;)(?<!&#x2019;)(?<!&#x27;)';
       $return_array['words'] = '@(^|;| |&nbsp;|\(|\n)'.$no_apostrophe.'('.$word_matches.') @i';
-      if ($decoded) {
-        $return_array['words'] = '@(^| |' . "\xC2\xA0" . '|\(|\n|"|„|“|‚|‘)('.$word_matches.') @i';
-      }
     }
 
     $word_matches = '';
@@ -303,10 +304,8 @@ class Zalomeni {
       }
     }
     if ($word_matches !== '') {
-      $return_array['units'] = '@(\d) ('.$word_matches.')(^|[;\.!:]| |&nbsp;|\?|\n|\)|<|\010|\013|$)@i';
-      if ($decoded) {
-        $return_array['units'] = str_replace('&nbsp;', "\xC2\xA0", $return_array['units']);
-      }
+      $nbsp = $decoded ? "\xC2\xA0" : '&nbsp;';
+      $return_array['units'] = '@(\d) ('.$word_matches.')(^|[;\.!:]| |'.$nbsp.'|\?|\n|\)|<|\010|\013|$)@i';
     }
 
     if (get_option('zalomeni_space_between_numbers', self::default_space_between_numbers) === 'on') {
