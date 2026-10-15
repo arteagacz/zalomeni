@@ -437,7 +437,7 @@ class Zalomeni {
 
   /** Typography for public Bricks HTML; text updates require WordPress 6.7+. */
   public static function texturize_bricks($html) {
-    if (!is_string($html) || $html === '' || !class_exists('WP_HTML_Processor')
+    if (!is_string($html) || $html === '' || !class_exists('Zalomeni_HTML_Processor')
         || !method_exists('WP_HTML_Processor', 'set_modifiable_text')) {
       return $html;
     }
@@ -456,25 +456,36 @@ class Zalomeni {
       $replacements[] = $compiled_replacements[$key];
     }
 
-    $processor = WP_HTML_Processor::create_fragment($html);
+    $processor = Zalomeni_HTML_Processor::create_fragment($html);
     if ($processor === null) return $html;
     $excluded = apply_filters('no_texturize_tags', array('pre', 'code', 'kbd', 'style', 'script', 'tt'));
     $excluded = array_merge(array_map('strtoupper', $excluded), array('SVG', 'MATH'));
+    // set_modifiable_text() rewrites the whole document for every changed node,
+    // which is quadratic on long pages. Collect the edits and splice them once.
+    $output = '';
+    $copied_up_to = 0;
     while ($processor->next_token()) {
       if ($processor->get_token_type() !== '#text' || $processor->get_namespace() !== 'html'
           || array_intersect($excluded, $processor->get_breadcrumbs())) {
         continue;
       }
       $text = $processor->get_modifiable_text();
+      // Every rule turns a regular space into a non-breaking one.
+      if (strpos($text, ' ') === false) continue;
       $result = self::replace_spaces($text, $matches, $replacements, true);
-      if ($result !== $text && !$processor->set_modifiable_text($result)) {
-        return $html;
-      }
+      if ($result === $text) continue;
+      $span = $processor->get_token_span();
+      if ($span === null || $span->start < $copied_up_to) return $html;
+      // Skip nodes whose source bytes don't decode to the text that was processed.
+      if (WP_HTML_Decoder::decode_text_node(substr($html, $span->start, $span->length)) !== $text) continue;
+      $output .= substr($html, $copied_up_to, $span->start - $copied_up_to)
+        . strtr($result, array('&' => '&amp;', '<' => '&lt;', '>' => '&gt;'));
+      $copied_up_to = $span->start + $span->length;
     }
     if ($processor->get_last_error() !== null || $processor->paused_at_incomplete_token()) {
       return $html;
     }
-    return $processor->get_updated_html();
+    return $output . substr($html, $copied_up_to);
   }
 
   private static function replace_spaces($text, $matches, $replacements, $until_stable = false) {
@@ -532,6 +543,20 @@ class Zalomeni {
     }
 
     return $output;
+  }
+}
+
+if (class_exists('WP_HTML_Processor')) {
+  /** Exposes where the current token sits in the source HTML. */
+  class Zalomeni_HTML_Processor extends WP_HTML_Processor {
+    /** @return WP_HTML_Span|null Byte offset and length, or null if unavailable. */
+    public function get_token_span() {
+      if (!$this->set_bookmark('zalomeni')) return null;
+      // WP_HTML_Processor stores its bookmarks with a leading underscore.
+      $span = isset($this->bookmarks['_zalomeni']) ? $this->bookmarks['_zalomeni'] : null;
+      $this->release_bookmark('zalomeni');
+      return $span;
+    }
   }
 }
 
