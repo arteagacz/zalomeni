@@ -477,8 +477,10 @@ class Zalomeni {
       if ($result === $text) continue;
       $span = $processor->get_token_span();
       if ($span === null || $span->start < $copied_up_to) return $html;
-      // Skip nodes whose source bytes don't decode to the text that was processed.
-      if (WP_HTML_Decoder::decode_text_node(substr($html, $span->start, $span->length)) !== $text) continue;
+      // Match WordPress's text normalization before checking the source span.
+      $source_text = str_replace(array("\r\n", "\r"), "\n", substr($html, $span->start, $span->length));
+      $source_text = str_replace("\x00", '', WP_HTML_Decoder::decode_text_node($source_text));
+      if ($source_text !== $text) continue;
       $output .= substr($html, $copied_up_to, $span->start - $copied_up_to)
         . strtr($result, array('&' => '&amp;', '<' => '&lt;', '>' => '&gt;'));
       $copied_up_to = $span->start + $span->length;

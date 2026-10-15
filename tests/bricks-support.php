@@ -114,6 +114,18 @@ function run_bricks_checks($disabled, $context) {
         $cases = array(
             'heading' => array('<h2>V lese</h2>', '<h2>V'.$nbsp.'lese</h2>'),
             'rich text' => array('<div><p>V lese <strong>a v zahradě</strong>.</p></div>', '<div><p>V'.$nbsp.'lese <strong>a'.$nbsp.'v'.$nbsp.'zahradě</strong>.</p></div>'),
+            'line feed' => array("<p>v lese\na v domě</p>", '<p>v'.$nbsp."lese\na".$nbsp.'v'.$nbsp.'domě</p>'),
+            'Windows line endings' => array("<p>v lese\r\na v domě</p>", '<p>v'.$nbsp."lese\na".$nbsp.'v'.$nbsp.'domě</p>'),
+            'carriage return' => array("<p>v lese\ra v domě</p>", '<p>v'.$nbsp."lese\na".$nbsp.'v'.$nbsp.'domě</p>'),
+            'null byte' => array("<p>v lese\0\na v domě</p>", '<p>v'.$nbsp."lese\na".$nbsp.'v'.$nbsp.'domě</p>'),
+            'encoded spaces and control characters' => array(
+                '<p>v&#32;lese&#13;X&#10;v&#32;lese&#0;</p>',
+                '<p>v'.$nbsp."lese\rX\nv".$nbsp."lese\xEF\xBF\xBD</p>",
+            ),
+            'normalized text around protected content' => array(
+                "<p>v lese</p><code>v lese\r\n\0 a v domě</code><p>v lese\r\na v domě</p>",
+                '<p>v'.$nbsp."lese</p><code>v lese\r\n\0 a v domě</code><p>v".$nbsp."lese\na".$nbsp.'v'.$nbsp.'domě</p>',
+            ),
             // Neutral Czech fixture
             'representative paragraph' => array(
                 '<p class="brxe-test01 brxe-text-basic">Návrh vzniká s důrazem na detail. Prostor v našem pojetí vypráví příběh, v němž se design propojuje s potřebami klientů.</p>',
